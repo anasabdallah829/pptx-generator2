@@ -64,7 +64,7 @@ def show_details_section():
                     st.info(detail['message'])
 
 def analyze_slide_placeholders(prs):
-    """تحليل شامل لجميع placeholders في الشريحة الأولى"""
+    """تحليل جميع placeholders في الشريحة الأولى مع ضبط الإحداثيات"""
     if len(prs.slides) == 0:
         return None
     
@@ -79,23 +79,23 @@ def analyze_slide_placeholders(prs):
         'slide_dimensions': {
             'width': slide_width,
             'height': slide_height,
-            'width_inches': slide_width / 914400,  # تحويل من EMU إلى بوصة
+            'width_inches': slide_width / 914400,
             'height_inches': slide_height / 914400
         }
     }
     
     placeholder_id = 0
+    def clamp_percent(val):
+        # تأكد أن القيمة بين 0 و 100 دائماً
+        return max(0, min(val, 100))
     
     for shape in first_slide.shapes:
         if shape.is_placeholder:
             placeholder_type = shape.placeholder_format.type
-            
-            # حساب الموقع النسبي (نسبة مئوية من أبعاد الشريحة)
-            left_percent = min(max((shape.left / slide_width) * 100, 0), 100)
-            top_percent = min(max((shape.top / slide_height) * 100, 0), 100)
-            width_percent = min(max((shape.width / slide_width) * 100, 0), 100)
-            height_percent = min(max((shape.height / slide_height) * 100, 0), 100)
-            
+            left_percent = clamp_percent((shape.left / slide_width) * 100)
+            top_percent = clamp_percent((shape.top / slide_height) * 100)
+            width_percent = clamp_percent((shape.width / slide_width) * 100)
+            height_percent = clamp_percent((shape.height / slide_height) * 100)
             placeholder_info = {
                 'id': placeholder_id,
                 'type': placeholder_type,
@@ -109,30 +109,23 @@ def analyze_slide_placeholders(prs):
                 'height_percent': height_percent,
                 'rotation': getattr(shape, 'rotation', 0)
             }
-            
             if placeholder_type == PP_PLACEHOLDER.PICTURE:
                 placeholder_info['current_content'] = "صورة"
                 placeholders['image_placeholders'].append(placeholder_info)
-                
             elif placeholder_type == PP_PLACEHOLDER.TITLE:
                 placeholder_info['current_content'] = shape.text_frame.text if hasattr(shape, 'text_frame') and shape.text_frame.text else "العنوان"
                 placeholders['title_placeholders'].append(placeholder_info)
-                
             else:
                 if hasattr(shape, 'text_frame') and shape.text_frame:
                     placeholder_info['current_content'] = shape.text_frame.text if shape.text_frame.text else f"نص {placeholder_id + 1}"
                     placeholders['text_placeholders'].append(placeholder_info)
-            
             placeholder_id += 1
-    
-    # البحث عن الصور العادية (غير placeholders)
     for shape in first_slide.shapes:
         if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and not shape.is_placeholder:
-            left_percent = min(max((shape.left / slide_width) * 100, 0), 100)
-            top_percent = min(max((shape.top / slide_height) * 100, 0), 100)
-            width_percent = min(max((shape.width / slide_width) * 100, 0), 100)
-            height_percent = min(max((shape.height / slide_height) * 100, 0), 100)
-            
+            left_percent = clamp_percent((shape.left / slide_width) * 100)
+            top_percent = clamp_percent((shape.top / slide_height) * 100)
+            width_percent = clamp_percent((shape.width / slide_width) * 100)
+            height_percent = clamp_percent((shape.height / slide_height) * 100)
             image_info = {
                 'id': placeholder_id,
                 'type': 'regular_image',
@@ -147,27 +140,23 @@ def analyze_slide_placeholders(prs):
                 'rotation': getattr(shape, 'rotation', 0),
                 'current_content': "صورة موجودة"
             }
-            
             placeholders['image_placeholders'].append(image_info)
             placeholder_id += 1
-    
     return placeholders
+
 def render_slide_preview(slide_analysis):
-    """عرض معاينة تفاعلية للشريحة مع placeholders داخل الإطار دائماً"""
+    """عرض معاينة تفاعلية للشريحة مع ضمان بقاء جميع المربعات داخل الإطار"""
     if not slide_analysis:
         return
-
     dimensions = slide_analysis['slide_dimensions']
     max_width = 1024
     aspect_ratio = dimensions['width'] / dimensions['height']
-
     if aspect_ratio > 1:
         display_width = max_width
         display_height = max_width / aspect_ratio
     else:
         display_height = max_width
         display_width = max_width * aspect_ratio
-
     st.markdown(f"""
     <div style="
         width: {display_width}px;
@@ -194,16 +183,13 @@ def render_slide_preview(slide_analysis):
             أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
         </div>
     """, unsafe_allow_html=True)
-
     placeholder_html = ""
-
     def clamp_box(left, top, width, height):
         left = max(0, min(left, display_width-8))
         top = max(0, min(top, display_height-8))
         width = max(8, min(width, display_width-left))
         height = max(8, min(height, display_height-top))
         return left, top, width, height
-
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -232,7 +218,6 @@ def render_slide_preview(slide_analysis):
             🖼️ صورة {i+1}
         </div>
         """
-
     for i, placeholder in enumerate(slide_analysis['text_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -263,7 +248,6 @@ def render_slide_preview(slide_analysis):
             📝 نص {i+1}
         </div>
         """
-
     for i, placeholder in enumerate(slide_analysis['title_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -292,7 +276,6 @@ def render_slide_preview(slide_analysis):
             📋 عنوان
         </div>
         """
-
     st.markdown(placeholder_html + "</div>", unsafe_allow_html=True)
     
 def configure_image_placeholders(image_placeholders):
