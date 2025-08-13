@@ -153,15 +153,14 @@ def analyze_slide_placeholders(prs):
     
     return placeholders
 def render_slide_preview(slide_analysis):
-    """عرض معاينة تفاعلية للشريحة مع placeholders"""
+    """عرض معاينة تفاعلية للشريحة مع placeholders داخل الإطار دائماً"""
     if not slide_analysis:
         return
-    
+
     dimensions = slide_analysis['slide_dimensions']
-    
     max_width = 1024
     aspect_ratio = dimensions['width'] / dimensions['height']
-    
+
     if aspect_ratio > 1:
         display_width = max_width
         display_height = max_width / aspect_ratio
@@ -169,20 +168,18 @@ def render_slide_preview(slide_analysis):
         display_height = max_width
         display_width = max_width * aspect_ratio
 
-    # إطار الشريحة
     st.markdown(f"""
     <div style="
-        width: {display_width}px; 
-        height: {display_height}px; 
-        border: 2px solid #ddd; 
-        position: relative; 
+        width: {display_width}px;
+        height: {display_height}px;
+        border: 2px solid #ddd;
+        position: relative;
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         margin: 20px auto;
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         overflow: hidden;
     ">
-        <!-- مربع أبعاد الشريحة أعلى اليسار دائماً -->
         <div style="
             position: absolute;
             top: 5px;
@@ -193,22 +190,20 @@ def render_slide_preview(slide_analysis):
             border-radius: 5px;
             font-size: 12px;
             z-index:10;
-            pointer-events: none;
         ">
             أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
         </div>
     """, unsafe_allow_html=True)
-    
+
     placeholder_html = ""
-    # Helper: لا يتجاوز أي مربع حدود العرض/الارتفاع
+
     def clamp_box(left, top, width, height):
-        left = max(0, min(left, display_width-1))
-        top = max(0, min(top, display_height-1))
+        left = max(0, min(left, display_width-8))
+        top = max(0, min(top, display_height-8))
         width = max(8, min(width, display_width-left))
         height = max(8, min(height, display_height-top))
         return left, top, width, height
 
-    # صور placeholders
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -238,7 +233,6 @@ def render_slide_preview(slide_analysis):
         </div>
         """
 
-    # نص placeholders
     for i, placeholder in enumerate(slide_analysis['text_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -270,7 +264,6 @@ def render_slide_preview(slide_analysis):
         </div>
         """
 
-    # عنوان placeholders
     for i, placeholder in enumerate(slide_analysis['title_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
