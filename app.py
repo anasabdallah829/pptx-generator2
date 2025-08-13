@@ -255,7 +255,8 @@ def render_slide_preview(slide_analysis):
         """
 
     # ثم رسم إطار الشريحة فوقهم
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div style="
         width: {display_width}px;
         height: {display_height}px;
@@ -283,7 +284,9 @@ def render_slide_preview(slide_analysis):
         </div>
         {placeholder_html}
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True
+    )
     
 def configure_image_placeholders(image_placeholders):
     """إعداد واجهة تكوين صور placeholders"""
