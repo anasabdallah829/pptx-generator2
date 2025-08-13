@@ -91,10 +91,10 @@ def analyze_slide_placeholders(prs):
             placeholder_type = shape.placeholder_format.type
             
             # حساب الموقع النسبي (نسبة مئوية من أبعاد الشريحة)
-            left_percent = (shape.left / slide_width) * 100
-            top_percent = (shape.top / slide_height) * 100
-            width_percent = (shape.width / slide_width) * 100
-            height_percent = (shape.height / slide_height) * 100
+            left_percent = min(max((shape.left / slide_width) * 100, 0), 100)
+            top_percent = min(max((shape.top / slide_height) * 100, 0), 100)
+            width_percent = min(max((shape.width / slide_width) * 100, 0), 100)
+            height_percent = min(max((shape.height / slide_height) * 100, 0), 100)
             
             placeholder_info = {
                 'id': placeholder_id,
@@ -128,10 +128,10 @@ def analyze_slide_placeholders(prs):
     # البحث عن الصور العادية (غير placeholders)
     for shape in first_slide.shapes:
         if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and not shape.is_placeholder:
-            left_percent = (shape.left / slide_width) * 100
-            top_percent = (shape.top / slide_height) * 100
-            width_percent = (shape.width / slide_width) * 100
-            height_percent = (shape.height / slide_height) * 100
+            left_percent = min(max((shape.left / slide_width) * 100, 0), 100)
+            top_percent = min(max((shape.top / slide_height) * 100, 0), 100)
+            width_percent = min(max((shape.width / slide_width) * 100, 0), 100)
+            height_percent = min(max((shape.height / slide_height) * 100, 0), 100)
             
             image_info = {
                 'id': placeholder_id,
@@ -152,7 +152,6 @@ def analyze_slide_placeholders(prs):
             placeholder_id += 1
     
     return placeholders
-
 
 def render_slide_preview(slide_analysis):
     """عرض معاينة تفاعلية للشريحة مع placeholders"""
@@ -205,11 +204,11 @@ def render_slide_preview(slide_analysis):
     
     # عرض صور placeholders
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
-        left = (placeholder['left_percent'] / 100) * display_width
-        top = (placeholder['top_percent'] / 100) * display_height
-        width = (placeholder['width_percent'] / 100) * display_width
-        height = (placeholder['height_percent'] / 100) * display_height
-        
+        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
+        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
+        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
+        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
+
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -234,11 +233,11 @@ def render_slide_preview(slide_analysis):
     
     # عرض text placeholders
     for i, placeholder in enumerate(slide_analysis['text_placeholders']):
-        left = (placeholder['left_percent'] / 100) * display_width
-        top = (placeholder['top_percent'] / 100) * display_height
-        width = (placeholder['width_percent'] / 100) * display_width
-        height = (placeholder['height_percent'] / 100) * display_height
-        
+        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
+        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
+        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
+        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
+
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -265,11 +264,11 @@ def render_slide_preview(slide_analysis):
     
     # عرض title placeholders
     for i, placeholder in enumerate(slide_analysis['title_placeholders']):
-        left = (placeholder['left_percent'] / 100) * display_width
-        top = (placeholder['top_percent'] / 100) * display_height
-        width = (placeholder['width_percent'] / 100) * display_width
-        height = (placeholder['height_percent'] / 100) * display_height
-        
+        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
+        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
+        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
+        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
+
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -485,15 +484,54 @@ def step2_configure_placeholders():
     if st.session_state.slide_analysis:
         render_slide_preview(st.session_state.slide_analysis)
         
-        # إحصائيات سريعة
+        # إحصائيات سريعة بخلفية وألوان مميزة
         analysis = st.session_state.slide_analysis
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("مواضع الصور", len(analysis['image_placeholders']))
-        with col2:
-            st.metric("مواضع النصوص", len(analysis['text_placeholders']))
-        with col3:
-            st.metric("العناوين", len(analysis['title_placeholders']))
+        stats_html = f"""
+        <div style="
+            margin: 15px 0; 
+            display: flex; 
+            gap: 24px;
+            justify-content: center;
+        ">
+            <div style="
+                background: linear-gradient(135deg, #ffe6e6 0%, #ffd6d6 100%);
+                border-radius: 12px; 
+                padding: 20px 35px; 
+                box-shadow: 0 3px 8px rgba(255,107,107,0.08); 
+                text-align: center;
+                min-width: 140px;
+                border: 2px solid #ff6b6b;">
+                <span style="font-size:32px;">🖼️</span>
+                <div style="font-size:22px; font-weight:bold; color:#ff6b6b;">{len(analysis['image_placeholders'])}</div>
+                <div style="font-size:15px; color:#ff6b6b;">مواضع الصور</div>
+            </div>
+            <div style="
+                background: linear-gradient(135deg, #e6fff9 0%, #d6fff6 100%);
+                border-radius: 12px; 
+                padding: 20px 35px; 
+                box-shadow: 0 3px 8px rgba(78,205,196,0.08); 
+                text-align: center;
+                min-width: 140px;
+                border: 2px solid #4ecdc4;">
+                <span style="font-size:32px;">📝</span>
+                <div style="font-size:22px; font-weight:bold; color:#4ecdc4;">{len(analysis['text_placeholders'])}</div>
+                <div style="font-size:15px; color:#4ecdc4;">مواضع النصوص</div>
+            </div>
+            <div style="
+                background: linear-gradient(135deg, #e6f7ff 0%, #d6eaff 100%);
+                border-radius: 12px; 
+                padding: 20px 35px; 
+                box-shadow: 0 3px 8px rgba(69,183,209,0.08); 
+                text-align: center;
+                min-width: 140px;
+                border: 2px solid #45b7d1;">
+                <span style="font-size:32px;">📋</span>
+                <div style="font-size:22px; font-weight:bold; color:#45b7d1;">{len(analysis['title_placeholders'])}</div>
+                <div style="font-size:15px; color:#45b7d1;">العناوين</div>
+            </div>
+        </div>
+        """
+        st.markdown(stats_html, unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -535,6 +573,7 @@ def step2_configure_placeholders():
                     elif config['type'] == 'اسم المجلد':
                         st.success(f"📁 اسم المجلد: سيتم استخدام اسم كل مجلد")
 
+# باقي الكود كما هو (لا تغيره)
 def get_image_date(image_path):
     """استخراج تاريخ التقاط الصورة من metadata"""
     try:
