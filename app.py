@@ -288,53 +288,53 @@ def render_slide_preview(slide_analysis):
     """, unsafe_allow_html=True)
     
     def configure_image_placeholders(image_placeholders):
-    """إعداد واجهة تكوين صور placeholders"""
-    if not image_placeholders:
-        st.info("لا توجد مواضع صور في هذا القالب")
-        return {}
-    
-    st.markdown("### 🖼️ إعدادات الصور")
-    st.info(f"تم العثور على {len(image_placeholders)} موضع صورة في القالب")
-    
-    config = {}
-    
-    for i, placeholder in enumerate(image_placeholders):
-        with st.expander(f"🖼️ إعداد الصورة {i+1}", expanded=True):
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                use_image = st.checkbox(
-                    f"استبدال هذه الصورة",
-                    value=True,
-                    key=f"use_image_{placeholder['id']}"
-                )
+        """إعداد واجهة تكوين صور placeholders"""
+        if not image_placeholders:
+            st.info("لا توجد مواضع صور في هذا القالب")
+            return {}
+        
+        st.markdown("### 🖼️ إعدادات الصور")
+        st.info(f"تم العثور على {len(image_placeholders)} موضع صورة في القالب")
+        
+        config = {}
+        
+        for i, placeholder in enumerate(image_placeholders):
+            with st.expander(f"🖼️ إعداد الصورة {i+1}", expanded=True):
+                col1, col2 = st.columns([2, 1])
                 
-                if use_image:
-                    image_order = st.number_input(
-                        f"ترتيب الصورة (1 = الصورة الأولى في كل مجلد)",
-                        min_value=1,
-                        max_value=20,
-                        value=i+1,
-                        key=f"image_order_{placeholder['id']}"
+                with col1:
+                    use_image = st.checkbox(
+                        f"استبدال هذه الصورة",
+                        value=True,
+                        key=f"use_image_{placeholder['id']}"
                     )
-                else:
-                    image_order = None
-            
-            with col2:
-                st.markdown(f"""
-                **معلومات الموضع:**
-                - العرض: {placeholder['width_percent']:.1f}%
-                - الارتفاع: {placeholder['height_percent']:.1f}%
-                - الموقع: ({placeholder['left_percent']:.1f}%, {placeholder['top_percent']:.1f}%)
-                """)
-            
-            config[f"image_{placeholder['id']}"] = {
-                'use': use_image,
-                'order': image_order,
-                'placeholder_info': placeholder
-            }
-    
-    return config
+                    
+                    if use_image:
+                        image_order = st.number_input(
+                            f"ترتيب الصورة (1 = الصورة الأولى في كل مجلد)",
+                            min_value=1,
+                            max_value=20,
+                            value=i+1,
+                            key=f"image_order_{placeholder['id']}"
+                        )
+                    else:
+                        image_order = None
+                
+                with col2:
+                    st.markdown(f"""
+                    **معلومات الموضع:**
+                    - العرض: {placeholder['width_percent']:.1f}%
+                    - الارتفاع: {placeholder['height_percent']:.1f}%
+                    - الموقع: ({placeholder['left_percent']:.1f}%, {placeholder['top_percent']:.1f}%)
+                    """)
+                
+                config[f"image_{placeholder['id']}"] = {
+                    'use': use_image,
+                    'order': image_order,
+                    'placeholder_info': placeholder
+                }
+        
+        return config
 
 def configure_text_placeholders(text_placeholders):
     """إعداد واجهة تكوين نص placeholders"""
