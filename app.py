@@ -7,6 +7,10 @@ from pptx.enum.shapes import PP_PLACEHOLDER, MSO_SHAPE_TYPE
 import shutil
 from pptx.util import Inches
 import random
+from datetime import datetime, date
+from PIL import Image
+from PIL.ExifTags import TAGS
+import tempfile
 
 # إعداد صفحة Streamlit
 st.set_page_config(
@@ -18,7 +22,7 @@ st.set_page_config(
 # العنوان الرئيسي
 st.title("🔄 PowerPoint Image & Placeholder Replacer")
 st.markdown("---")
-st.markdown("### 📋 أداة استبدال الصور في عروض PowerPoint التقديمية")
+st.markdown("### 📋 أداة استبدال الصور والنصوص في عروض PowerPoint التقديمية")
 
 # واجهة المستخدم لرفع الملفات
 st.markdown("#### 📂 رفع الملفات")
@@ -38,6 +42,8 @@ uploaded_zip = st.file_uploader(
 
 # خيارات المعالجة
 st.markdown("#### ⚙️ إعدادات المعالجة")
+
+# خيار ترتيب الصور
 image_order_option = st.radio(
     "كيف تريد ترتيب الصور في الشرائح؟",
     ("بالترتيب (افتراضي)", "عشوائي"),
@@ -45,12 +51,15 @@ image_order_option = st.radio(
     help="اختر طريقة ترتيب الصور داخل كل شريحة"
 )
 
-# إنشاء متغيرات session state للتفاصيل
+# إنشاء متغيرات session state
 if 'processing_details' not in st.session_state:
     st.session_state.processing_details = []
 
 if 'show_details_needed' not in st.session_state:
     st.session_state.show_details_needed = False
+
+if 'text_placeholders_config' not in st.session_state:
+    st.session_state.text_placeholders_config = {}
 
 def add_detail(message, detail_type="info"):
     """إضافة تفصيل جديد إلى قائمة التفاصيل"""
@@ -59,7 +68,6 @@ def add_detail(message, detail_type="info"):
         'type': detail_type
     })
     
-    # تحديد ما إذا كان هناك حاجة لإظهار التفاصيل
     if detail_type in ['error', 'warning']:
         st.session_state.show_details_needed = True
 
@@ -87,6 +95,165 @@ def show_details_button():
     if st.session_state.processing_details:
         if st.button("📋 إظهار تفاصيل المعالجة"):
             show_details_section()
+
+def get_image_date(image_path):
+    """استخراج تاريخ التقاط الصورة من metadata"""
+    try:
+        with Image.open(image_path) as img:
+            exifdata = img.getexif()
+            for tag_id in exifdata:
+                tag = TAGS.get(tag_id, tag_id)
+                data = exifdata.get(tag_id)
+                
+                # البحث عن تاريخ التقاط الصورة
+                if tag in ['DateTime', 'DateTimeOriginal', 'DateTimeDigitized']:
+                    try:
+                        # تحويل التاريخ من تنسيق EXIF إلى datetime
+                        date_obj = datetime.strptime(str(data), '%Y:%m:%d %H:%M:%S')
+                        return date_obj.strftime('%Y-%m-%d')
+                    except:
+                        continue
+        
+        # إذا لم نجد تاريخ في EXIF، نستخدم تاريخ تعديل الملف
+        timestamp = os.path.getmtime(image_path)
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+    except:
+        # في حالة فشل كل شيء، نعيد تاريخ اليوم
+        return datetime.now().strftime('%Y-%m-%d')
+
+def analyze_text_placeholders(prs):
+    """تحليل text placeholders في الشريحة الأولى"""
+    if len(prs.slides) == 0:
+        return []
+    
+    first_slide = prs.slides[0]
+    text_placeholders = []
+    
+    for shape in first_slide.shapes:
+        if shape.is_placeholder:
+            placeholder_type = shape.placeholder_format.type
+            
+            # تجاهل placeholders للصور والعناوين
+            if placeholder_type not in [PP_PLACEHOLDER.PICTURE, PP_PLACEHOLDER.TITLE]:
+                # التحقق من وجود نص في placeholder
+                if hasattr(shape, 'text_frame') and shape.text_frame:
+                    placeholder_info = {
+                        'type': placeholder_type,
+                        'current_text': shape.text_frame.text if shape.text_frame.text else f"نص تلقائي {len(text_placeholders) + 1}",
+                        'shape_id': id(shape)
+                    }
+                    text_placeholders.append(placeholder_info)
+    
+    return text_placeholders
+
+def configure_text_placeholders(text_placeholders):
+    """إعداد واجهة تكوين text placeholders"""
+    if not text_placeholders:
+        return {}
+    
+    st.markdown("#### 📝 إعدادات النصوص")
+    st.info(f"تم العثور على {len(text_placeholders)} مكان نص في القالب. يمكنك تخصيص محتواها:")
+    
+    config = {}
+    
+    for i, placeholder in enumerate(text_placeholders):
+        with st.expander(f"📝 إعداد النص {i+1}: {placeholder['current_text']}", expanded=False):
+            
+            fill_option = st.radio(
+                f"كيف تريد ملء هذا النص؟",
+                ("ترك فارغ", "نص ثابت", "تاريخ", "تاريخ الصورة"),
+                key=f"fill_option_{i}",
+                index=0
+            )
+            
+            placeholder_config = {
+                'type': fill_option,
+                'value': None
+            }
+            
+            if fill_option == "نص ثابت":
+                custom_text = st.text_input(
+                    "أدخل النص المطلوب:",
+                    key=f"custom_text_{i}",
+                    placeholder="مثال: اسم المشروع، اسم الشركة، إلخ..."
+                )
+                placeholder_config['value'] = custom_text
+                
+            elif fill_option == "تاريخ":
+                date_option = st.radio(
+                    "اختر نوع التاريخ:",
+                    ("تاريخ اليوم", "تاريخ مخصص"),
+                    key=f"date_option_{i}"
+                )
+                
+                if date_option == "تاريخ اليوم":
+                    placeholder_config['value'] = "today"
+                else:
+                    custom_date = st.date_input(
+                        "اختر التاريخ:",
+                        key=f"custom_date_{i}",
+                        value=date.today()
+                    )
+                    placeholder_config['value'] = custom_date.strftime('%Y-%m-%d')
+                    
+            elif fill_option == "تاريخ الصورة":
+                placeholder_config['value'] = "image_date"
+                st.info("سيتم استخدام تاريخ التقاط الصورة الأولى في كل مجلد")
+            
+            config[f"placeholder_{i}"] = placeholder_config
+    
+    return config
+
+def apply_text_to_placeholders(slide, text_placeholders, config, folder_path=None):
+    """تطبيق النصوص على text placeholders"""
+    if not text_placeholders or not config:
+        return
+    
+    placeholder_shapes = []
+    for shape in slide.shapes:
+        if shape.is_placeholder:
+            placeholder_type = shape.placeholder_format.type
+            if placeholder_type not in [PP_PLACEHOLDER.PICTURE, PP_PLACEHOLDER.TITLE]:
+                if hasattr(shape, 'text_frame') and shape.text_frame:
+                    placeholder_shapes.append(shape)
+    
+    for i, shape in enumerate(placeholder_shapes):
+        config_key = f"placeholder_{i}"
+        if config_key in config:
+            placeholder_config = config[config_key]
+            
+            try:
+                if placeholder_config['type'] == "ترك فارغ":
+                    shape.text_frame.text = ""
+                    
+                elif placeholder_config['type'] == "نص ثابت":
+                    if placeholder_config['value']:
+                        shape.text_frame.text = placeholder_config['value']
+                        add_detail(f"✅ تم تطبيق النص الثابت: {placeholder_config['value']}", "success")
+                    
+                elif placeholder_config['type'] == "تاريخ":
+                    if placeholder_config['value'] == "today":
+                        date_text = datetime.now().strftime('%Y-%m-%d')
+                    else:
+                        date_text = placeholder_config['value']
+                    shape.text_frame.text = date_text
+                    add_detail(f"✅ تم تطبيق التاريخ: {date_text}", "success")
+                    
+                elif placeholder_config['type'] == "تاريخ الصورة" and folder_path:
+                    # البحث عن أول صورة في المجلد
+                    imgs = [f for f in os.listdir(folder_path) 
+                           if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'))]
+                    if imgs:
+                        first_image_path = os.path.join(folder_path, imgs[0])
+                        image_date = get_image_date(first_image_path)
+                        shape.text_frame.text = image_date
+                        add_detail(f"✅ تم تطبيق تاريخ الصورة: {image_date}", "success")
+                    else:
+                        shape.text_frame.text = datetime.now().strftime('%Y-%m-%d')
+                        add_detail("⚠ لم توجد صور، تم استخدام تاريخ اليوم", "warning")
+                        
+            except Exception as e:
+                add_detail(f"⚠ خطأ في تطبيق النص على placeholder: {e}", "warning")
 
 def analyze_first_slide(prs):
     """تحليل الشريحة الأولى لاستخراج معلومات القالب"""
@@ -176,7 +343,6 @@ def apply_shape_formatting(new_shape, formatting):
                 pass
                 
     except Exception as e:
-        # في حالة فشل تطبيق أي تنسيق، نتجاهل الخطأ ونكمل
         pass
 
 def get_image_shapes_info(slide):
@@ -346,7 +512,7 @@ def add_title_to_slide(slide, folder_name):
     except Exception as e:
         add_detail(f"⚠ خطأ في معالجة العنوان: {e}", "warning")
 
-def process_folder_images(slide, folder_path, folder_name, template_shapes_info, template_positions, mismatch_action):
+def process_folder_images(slide, folder_path, folder_name, template_shapes_info, template_positions, mismatch_action, text_placeholders, text_config):
     """معالجة صور مجلد واحد وإضافتها للشريحة"""
     # الحصول على قائمة الصور
     imgs = [f for f in os.listdir(folder_path) 
@@ -368,6 +534,9 @@ def process_folder_images(slide, folder_path, folder_name, template_shapes_info,
     
     # إضافة العنوان
     add_title_to_slide(slide, folder_name)
+    
+    # تطبيق النصوص على text placeholders
+    apply_text_to_placeholders(slide, text_placeholders, text_config, folder_path)
     
     # الحصول على معلومات أشكال الصور في الشريحة الجديدة
     new_shapes_info = get_image_shapes_info(slide)
@@ -416,6 +585,26 @@ def process_folder_images(slide, folder_path, folder_name, template_shapes_info,
 def main():
     """الدالة الرئيسية للتطبيق"""
     if uploaded_pptx and uploaded_zip:
+        
+        # تحليل text placeholders قبل بدء المعالجة
+        if 'text_placeholders_analyzed' not in st.session_state:
+            with st.spinner("🔍 جاري تحليل القالب..."):
+                try:
+                    prs_temp = Presentation(io.BytesIO(uploaded_pptx.read()))
+                    text_placeholders = analyze_text_placeholders(prs_temp)
+                    st.session_state.text_placeholders = text_placeholders
+                    st.session_state.text_placeholders_analyzed = True
+                except Exception as e:
+                    st.error(f"❌ خطأ في تحليل القالب: {e}")
+                    st.stop()
+        
+        # إعداد text placeholders إذا وجدت
+        if st.session_state.text_placeholders:
+            text_config = configure_text_placeholders(st.session_state.text_placeholders)
+            st.session_state.text_placeholders_config = text_config
+        else:
+            st.session_state.text_placeholders_config = {}
+        
         if "process_started" not in st.session_state:
             st.session_state.process_started = False
 
@@ -538,6 +727,8 @@ def main():
                 # معالجة الشرائح
                 total_replaced = 0
                 created_slides = 0
+                text_placeholders = st.session_state.get('text_placeholders', [])
+                text_config = st.session_state.get('text_placeholders_config', {})
 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -552,7 +743,8 @@ def main():
                         
                         replaced_count = process_folder_images(
                             new_slide, folder_path, folder_name, 
-                            template_shapes_info, template_positions, mismatch_action
+                            template_shapes_info, template_positions, mismatch_action,
+                            text_placeholders, text_config
                         )
                         
                         total_replaced += replaced_count
@@ -571,17 +763,21 @@ def main():
                     del st.session_state['mismatch_action']
                 if 'process_started' in st.session_state: 
                     del st.session_state['process_started']
+                if 'text_placeholders_analyzed' in st.session_state:
+                    del st.session_state['text_placeholders_analyzed']
 
                 # عرض النتائج
                 st.success("🎉 تم الانتهاء من المعالجة بنجاح!")
                 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1: 
                     st.metric("الشرائح المُضافة", created_slides)
                 with col2: 
                     st.metric("الصور المُستبدلة", total_replaced)
                 with col3: 
                     st.metric("المجلدات المُعالجة", len(folder_paths))
+                with col4:
+                    st.metric("النصوص المُعالجة", len([k for k, v in text_config.items() if v['type'] != 'ترك فارغ']))
 
                 if created_slides == 0:
                     st.error("❌ لم يتم إضافة أي شرائح.")
@@ -635,15 +831,24 @@ def main():
             - يجب أن يحتوي على شريحة واحدة على الأقل
             - يتم استخدام تنسيق الشريحة الأولى كقالب للشرائح الجديدة
             - **يتم الحفاظ على جميع التنسيقات الأصلية للصور** (الحجم، الموقع، الدوران، الظلال، الحدود، إلخ)
+            - **🆕 دعم Text Placeholders**: يمكن تخصيص النصوص في القالب
 
             #### 2. **ملف ZIP:**
             - يجب أن يحتوي على مجلدات فرعية
             - كل مجلد يحتوي على صور لشريحة واحدة
             - أسماء المجلدات ستصبح عناوين الشرائح الجديدة
 
-            #### 3. **النتيجة:**
+            #### 3. **🆕 إعدادات النصوص:**
+            إذا احتوى القالب على مواضع نصوص، يمكنك اختيار:
+            - **ترك فارغ**: عدم إضافة أي نص
+            - **نص ثابت**: إدخال نص مخصص (مثل اسم المشروع)
+            - **تاريخ**: استخدام تاريخ اليوم أو تاريخ مخصص
+            - **تاريخ الصورة**: استخراج تاريخ التقاط الصورة من metadata
+
+            #### 4. **النتيجة:**
             - شريحة منفصلة لكل مجلد في الملف المضغوط
             - يتم استبدال الصور و placeholders في القالب بصور من المجلدات
+            - **🆕 تطبيق النصوص المخصصة** على text placeholders
             - في حال عدم وجود مواضع للصور في القالب، تُضاف الصورة الأولى من كل مجلد
             - **جميع التنسيقات الأصلية محفوظة**
 
@@ -674,10 +879,12 @@ def main():
 
             ### ✨ **الميزات الرئيسية:**
             - 🎨 **الحفاظ على التنسيقات**: جميع تنسيقات الصور الأصلية محفوظة
+            - 📝 **🆕 معالجة النصوص**: تخصيص text placeholders بطرق متعددة
+            - 📅 **🆕 استخراج تواريخ الصور**: من metadata الصور تلقائياً
             - 📋 **تفاصيل المعالجة**: يمكن عرض تفاصيل كاملة لعملية المعالجة
             - 🔀 **ترتيب الصور**: اختيار بين الترتيب الأبجدي أو العشوائي
             - ⚙️ **خيارات مرونة**: التعامل مع اختلاف عدد الصور بطرق متعددة
-            - 📊 **إحصائيات مفصلة**: عرض عدد الشرائح والصور المعالجة
+            - 📊 **إحصائيات مفصلة**: عرض عدد الشرائح والصور والنصوص المعالجة
             - 🔄 **معالجة تلقائية**: استبدال الصور والـ placeholders تلقائياً
 
             ---
@@ -686,6 +893,7 @@ def main():
             - تأكد من أن أسماء المجلدات واضحة ومفهومة (ستصبح عناوين الشرائح)
             - في حالة اختلاف عدد الصور بين المجلدات، ستحصل على خيارات للتعامل مع هذا الاختلاف
             - يُنصح بأن تكون الصور بنفس الأبعاد تقريباً للحصول على أفضل النتائج
+            - **🆕 تواريخ الصور**: يتم استخراج التاريخ من EXIF data أو تاريخ تعديل الملف
             """)
 
         # قسم الأسئلة الشائعة
@@ -704,6 +912,15 @@ def main():
             ### **س: هل يتم الحفاظ على تنسيقات الصور الأصلية؟**
             ج: نعم، يتم الحفاظ على جميع التنسيقات (الحجم، الموقع، الدوران، الظلال، الحدود، إلخ).
 
+            ### **🆕 س: كيف يعمل استخراج تاريخ الصورة؟**
+            ج: يتم استخراج التاريخ من EXIF metadata للصورة. إذا لم يكن متوفراً، يتم استخدام تاريخ تعديل الملف، وكحل أخير يتم استخدام تاريخ اليوم.
+
+            ### **🆕 س: ما هي أنواع Text Placeholders المدعومة؟**
+            ج: يتم دعم جميع أنواع text placeholders عدا العناوين (التي تُملأ تلقائياً بأسماء المجلدات) وplaceholders الصور.
+
+            ### **🆕 س: هل يمكن استخدام نصوص مختلفة لكل شريحة؟**
+            ج: حالياً، النصوص الثابتة والتواريخ المخصصة تكون موحدة لجميع الشرائح. أما تاريخ الصورة فيختلف حسب الصورة الأولى في كل مجلد.
+
             ### **س: ما هو الحد الأقصى لحجم الملفات؟**
             ج: يعتمد على إعدادات الخادم، لكن يُنصح بألا يتجاوز الملف المضغوط 200 ميجابايت.
 
@@ -721,19 +938,30 @@ def main():
                - تأكد من أن الصور بجودة جيدة
                - رتب الصور في المجلدات بالترتيب المطلوب
 
-            2. **تحسين الأداء:**
+            2. **🆕 تحسين استخراج تواريخ الصور:**
+               - تأكد من أن الصور تحتوي على EXIF metadata
+               - استخدم صور من كاميرات أو هواتف حديثة للحصول على تواريخ دقيقة
+               - تجنب الصور المُعدلة بشدة التي قد تفقد metadata
+
+            3. **🆕 إعداد Text Placeholders:**
+               - خطط مسبقاً للنصوص التي تريد إضافتها
+               - استخدم أسماء مجلدات واضحة إذا كنت تعتمد على العناوين التلقائية
+               - اختبر إعدادات النصوص مع عدد قليل من المجلدات أولاً
+
+            4. **تحسين الأداء:**
                - ضغط الصور قبل الرفع لتسريع المعالجة
                - تجنب رفع صور بأحجام كبيرة جداً (أكثر من 10 ميجابايت للصورة الواحدة)
 
-            3. **أفضل الممارسات:**
+            5. **أفضل الممارسات:**
                - اختبر التطبيق مع عدد قليل من المجلدات أولاً
                - احتفظ بنسخة احتياطية من ملف PowerPoint الأصلي
                - تأكد من أن جميع المجلدات تحتوي على صور
 
-            4. **استكشاف الأخطاء:**
+            6. **استكشاف الأخطاء:**
                - إذا فشلت العملية، تحقق من تفاصيل المعالجة
                - تأكد من أن أسماء الملفات لا تحتوي على رموز خاصة
                - جرب تقليل عدد الصور إذا كانت العملية بطيئة
+               - **🆕 تحقق من صحة تواريخ الصور** إذا كانت تظهر بشكل غير صحيح
             """)
 
 if __name__ == '__main__':
