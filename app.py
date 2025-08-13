@@ -152,7 +152,6 @@ def analyze_slide_placeholders(prs):
             placeholder_id += 1
     
     return placeholders
-
 def render_slide_preview(slide_analysis):
     """عرض معاينة تفاعلية للشريحة مع placeholders"""
     if not slide_analysis:
@@ -160,18 +159,17 @@ def render_slide_preview(slide_analysis):
     
     dimensions = slide_analysis['slide_dimensions']
     
-    # زيادة مساحة العرض للحصول على وضوح أفضل
     max_width = 1024
     aspect_ratio = dimensions['width'] / dimensions['height']
     
-    if aspect_ratio > 1:  # عرض أكبر من الارتفاع
+    if aspect_ratio > 1:
         display_width = max_width
         display_height = max_width / aspect_ratio
-    else:  # ارتفاع أكبر من العرض
+    else:
         display_height = max_width
         display_width = max_width * aspect_ratio
-    
-    # إصلاح الخطأ في string literal (استخدام ثلاثة علامات اقتباس في نهاية السطر)
+
+    # إطار الشريحة
     st.markdown(f"""
     <div style="
         width: {display_width}px; 
@@ -184,31 +182,39 @@ def render_slide_preview(slide_analysis):
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         overflow: hidden;
     ">
+        <!-- مربع أبعاد الشريحة أعلى اليسار دائماً -->
         <div style="
             position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
+            top: 5px;
+            left: 5px;
+            background: rgba(0,0,0,0.65);
             color: white;
-            padding: 5px 10px;
+            padding: 4px 10px;
             border-radius: 5px;
             font-size: 12px;
-            z-index:2;
+            z-index:10;
+            pointer-events: none;
         ">
             أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
         </div>
     """, unsafe_allow_html=True)
     
-    # عرض placeholders
     placeholder_html = ""
-    
-    # عرض صور placeholders
-    for i, placeholder in enumerate(slide_analysis['image_placeholders']):
-        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
-        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
-        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
-        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
+    # Helper: لا يتجاوز أي مربع حدود العرض/الارتفاع
+    def clamp_box(left, top, width, height):
+        left = max(0, min(left, display_width-1))
+        top = max(0, min(top, display_height-1))
+        width = max(8, min(width, display_width-left))
+        height = max(8, min(height, display_height-top))
+        return left, top, width, height
 
+    # صور placeholders
+    for i, placeholder in enumerate(slide_analysis['image_placeholders']):
+        left = (placeholder['left_percent'] / 100) * display_width
+        top = (placeholder['top_percent'] / 100) * display_height
+        width = (placeholder['width_percent'] / 100) * display_width
+        height = (placeholder['height_percent'] / 100) * display_height
+        left, top, width, height = clamp_box(left, top, width, height)
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -226,18 +232,19 @@ def render_slide_preview(slide_analysis):
             font-weight: bold;
             border-radius: 5px;
             z-index:3;
+            pointer-events: none;
         ">
             🖼️ صورة {i+1}
         </div>
         """
-    
-    # عرض text placeholders
-    for i, placeholder in enumerate(slide_analysis['text_placeholders']):
-        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
-        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
-        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
-        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
 
+    # نص placeholders
+    for i, placeholder in enumerate(slide_analysis['text_placeholders']):
+        left = (placeholder['left_percent'] / 100) * display_width
+        top = (placeholder['top_percent'] / 100) * display_height
+        width = (placeholder['width_percent'] / 100) * display_width
+        height = (placeholder['height_percent'] / 100) * display_height
+        left, top, width, height = clamp_box(left, top, width, height)
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -257,18 +264,19 @@ def render_slide_preview(slide_analysis):
             text-align: center;
             padding: 2px;
             z-index:3;
+            pointer-events: none;
         ">
             📝 نص {i+1}
         </div>
         """
-    
-    # عرض title placeholders
-    for i, placeholder in enumerate(slide_analysis['title_placeholders']):
-        left = min(max((placeholder['left_percent'] / 100) * display_width, 0), display_width-1)
-        top = min(max((placeholder['top_percent'] / 100) * display_height, 0), display_height-1)
-        width = min(max((placeholder['width_percent'] / 100) * display_width, 5), display_width-left)
-        height = min(max((placeholder['height_percent'] / 100) * display_height, 5), display_height-top)
 
+    # عنوان placeholders
+    for i, placeholder in enumerate(slide_analysis['title_placeholders']):
+        left = (placeholder['left_percent'] / 100) * display_width
+        top = (placeholder['top_percent'] / 100) * display_height
+        width = (placeholder['width_percent'] / 100) * display_width
+        height = (placeholder['height_percent'] / 100) * display_height
+        left, top, width, height = clamp_box(left, top, width, height)
         placeholder_html += f"""
         <div style="
             position: absolute;
@@ -286,13 +294,14 @@ def render_slide_preview(slide_analysis):
             font-weight: bold;
             border-radius: 5px;
             z-index:3;
+            pointer-events: none;
         ">
             📋 عنوان
         </div>
         """
-    
-    st.markdown(placeholder_html + "</div>", unsafe_allow_html=True)
 
+    st.markdown(placeholder_html + "</div>", unsafe_allow_html=True)
+    
 def configure_image_placeholders(image_placeholders):
     """إعداد واجهة تكوين صور placeholders"""
     if not image_placeholders:
