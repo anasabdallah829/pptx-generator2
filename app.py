@@ -145,10 +145,9 @@ def analyze_slide_placeholders(prs):
     return placeholders
 
 def render_slide_preview(slide_analysis):
-    """عرض معاينة الشريحة مع رسم كل مربعات placeholders داخل نفس إطار الشريحة بشكل صحيح"""
+    """عرض معاينة تفاعلية للشريحة مع رسم مربعات الـplaceholders أولاً ثم إطار الشريحة"""
     if not slide_analysis:
         return
-
     dimensions = slide_analysis['slide_dimensions']
     max_width = 1024
     aspect_ratio = dimensions['width'] / dimensions['height']
@@ -159,6 +158,8 @@ def render_slide_preview(slide_analysis):
         display_height = max_width
         display_width = max_width * aspect_ratio
 
+    # رسم مربعات placeholders أولاً
+    placeholder_html = ""
     def clamp_box(left, top, width, height):
         left = max(0, min(left, display_width-8))
         top = max(0, min(top, display_height-8))
@@ -166,15 +167,13 @@ def render_slide_preview(slide_analysis):
         height = max(8, min(height, display_height-top))
         return left, top, width, height
 
-    # اجمع جميع مربعات placeholders كـ HTML داخل إطار واحد
-    all_placeholders = []
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
         width = (placeholder['width_percent'] / 100) * display_width
         height = (placeholder['height_percent'] / 100) * display_height
         left, top, width, height = clamp_box(left, top, width, height)
-        all_placeholders.append(f"""
+        placeholder_html += f"""
         <div style="
             position: absolute;
             left: {left}px;
@@ -195,15 +194,14 @@ def render_slide_preview(slide_analysis):
         ">
             🖼️ صورة {i+1}
         </div>
-        """)
-
+        """
     for i, placeholder in enumerate(slide_analysis['text_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
         width = (placeholder['width_percent'] / 100) * display_width
         height = (placeholder['height_percent'] / 100) * display_height
         left, top, width, height = clamp_box(left, top, width, height)
-        all_placeholders.append(f"""
+        placeholder_html += f"""
         <div style="
             position: absolute;
             left: {left}px;
@@ -226,15 +224,14 @@ def render_slide_preview(slide_analysis):
         ">
             📝 نص {i+1}
         </div>
-        """)
-
+        """
     for i, placeholder in enumerate(slide_analysis['title_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
         width = (placeholder['width_percent'] / 100) * display_width
         height = (placeholder['height_percent'] / 100) * display_height
         left, top, width, height = clamp_box(left, top, width, height)
-        all_placeholders.append(f"""
+        placeholder_html += f"""
         <div style="
             position: absolute;
             left: {left}px;
@@ -255,9 +252,9 @@ def render_slide_preview(slide_analysis):
         ">
             📋 عنوان
         </div>
-        """)
+        """
 
-    # اطبع إطار الشريحة مع كل مربعات placeholders بداخله مباشرة
+    # ثم رسم إطار الشريحة فوقهم
     st.markdown(f"""
     <div style="
         width: {display_width}px;
@@ -269,6 +266,7 @@ def render_slide_preview(slide_analysis):
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         overflow: hidden;
+        z-index: 5;
     ">
         <div style="
             position: absolute;
@@ -283,58 +281,58 @@ def render_slide_preview(slide_analysis):
         ">
             أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
         </div>
-        {''.join(all_placeholders)}
+        {placeholder_html}
     </div>
     """, unsafe_allow_html=True)
     
-    def configure_image_placeholders(image_placeholders):
-        """إعداد واجهة تكوين صور placeholders"""
-        if not image_placeholders:
-            st.info("لا توجد مواضع صور في هذا القالب")
-            return {}
-        
-        st.markdown("### 🖼️ إعدادات الصور")
-        st.info(f"تم العثور على {len(image_placeholders)} موضع صورة في القالب")
-        
-        config = {}
-        
-        for i, placeholder in enumerate(image_placeholders):
-            with st.expander(f"🖼️ إعداد الصورة {i+1}", expanded=True):
-                col1, col2 = st.columns([2, 1])
+def configure_image_placeholders(image_placeholders):
+    """إعداد واجهة تكوين صور placeholders"""
+    if not image_placeholders:
+        st.info("لا توجد مواضع صور في هذا القالب")
+        return {}
+    
+    st.markdown("### 🖼️ إعدادات الصور")
+    st.info(f"تم العثور على {len(image_placeholders)} موضع صورة في القالب")
+    
+    config = {}
+    
+    for i, placeholder in enumerate(image_placeholders):
+        with st.expander(f"🖼️ إعداد الصورة {i+1}", expanded=True):
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                use_image = st.checkbox(
+                    f"استبدال هذه الصورة",
+                    value=True,
+                    key=f"use_image_{placeholder['id']}"
+                )
                 
-                with col1:
-                    use_image = st.checkbox(
-                        f"استبدال هذه الصورة",
-                        value=True,
-                        key=f"use_image_{placeholder['id']}"
+                if use_image:
+                    image_order = st.number_input(
+                        f"ترتيب الصورة (1 = الصورة الأولى في كل مجلد)",
+                        min_value=1,
+                        max_value=20,
+                        value=i+1,
+                        key=f"image_order_{placeholder['id']}"
                     )
-                    
-                    if use_image:
-                        image_order = st.number_input(
-                            f"ترتيب الصورة (1 = الصورة الأولى في كل مجلد)",
-                            min_value=1,
-                            max_value=20,
-                            value=i+1,
-                            key=f"image_order_{placeholder['id']}"
-                        )
-                    else:
-                        image_order = None
-                
-                with col2:
-                    st.markdown(f"""
-                    **معلومات الموضع:**
-                    - العرض: {placeholder['width_percent']:.1f}%
-                    - الارتفاع: {placeholder['height_percent']:.1f}%
-                    - الموقع: ({placeholder['left_percent']:.1f}%, {placeholder['top_percent']:.1f}%)
-                    """)
-                
-                config[f"image_{placeholder['id']}"] = {
-                    'use': use_image,
-                    'order': image_order,
-                    'placeholder_info': placeholder
-                }
-        
-        return config
+                else:
+                    image_order = None
+            
+            with col2:
+                st.markdown(f"""
+                **معلومات الموضع:**
+                - العرض: {placeholder['width_percent']:.1f}%
+                - الارتفاع: {placeholder['height_percent']:.1f}%
+                - الموقع: ({placeholder['left_percent']:.1f}%, {placeholder['top_percent']:.1f}%)
+                """)
+            
+            config[f"image_{placeholder['id']}"] = {
+                'use': use_image,
+                'order': image_order,
+                'placeholder_info': placeholder
+            }
+    
+    return config
 
 def configure_text_placeholders(text_placeholders):
     """إعداد واجهة تكوين نص placeholders"""
