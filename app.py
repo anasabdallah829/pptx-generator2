@@ -145,7 +145,7 @@ def analyze_slide_placeholders(prs):
     return placeholders
 
 def render_slide_preview(slide_analysis):
-    """عرض معاينة تفاعلية للشريحة مع ضمان بقاء جميع المربعات داخل الإطار"""
+    """عرض معاينة تفاعلية للشريحة مع رسم مربعات الـplaceholders أولاً ثم إطار الشريحة"""
     if not slide_analysis:
         return
     dimensions = slide_analysis['slide_dimensions']
@@ -157,32 +157,8 @@ def render_slide_preview(slide_analysis):
     else:
         display_height = max_width
         display_width = max_width * aspect_ratio
-    st.markdown(f"""
-    <div style="
-        width: {display_width}px;
-        height: {display_height}px;
-        border: 2px solid #ddd;
-        position: relative;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        margin: 20px auto;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
-    ">
-        <div style="
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            background: rgba(0,0,0,0.65);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            z-index:10;
-        ">
-            أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
-        </div>
-    """, unsafe_allow_html=True)
+
+    # رسم مربعات placeholders أولاً
     placeholder_html = ""
     def clamp_box(left, top, width, height):
         left = max(0, min(left, display_width-8))
@@ -190,6 +166,7 @@ def render_slide_preview(slide_analysis):
         width = max(8, min(width, display_width-left))
         height = max(8, min(height, display_height-top))
         return left, top, width, height
+
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -276,7 +253,37 @@ def render_slide_preview(slide_analysis):
             📋 عنوان
         </div>
         """
-    st.markdown(placeholder_html + "</div>", unsafe_allow_html=True)
+
+    # ثم رسم إطار الشريحة فوقهم
+    st.markdown(f"""
+    <div style="
+        width: {display_width}px;
+        height: {display_height}px;
+        border: 2px solid #ddd;
+        position: relative;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        margin: 20px auto;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        z-index: 5;
+    ">
+        <div style="
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0,0,0,0.65);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index:10;
+        ">
+            أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
+        </div>
+        {placeholder_html}
+    </div>
+    """, unsafe_allow_html=True)
     
 def configure_image_placeholders(image_placeholders):
     """إعداد واجهة تكوين صور placeholders"""
