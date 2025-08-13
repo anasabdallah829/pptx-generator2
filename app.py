@@ -172,6 +172,7 @@ def render_slide_preview(slide_analysis):
         display_height = max_width
         display_width = max_width * aspect_ratio
     
+    # إصلاح الخطأ في string literal (استخدام ثلاثة علامات اقتباس في نهاية السطر)
     st.markdown(f"""
     <div style="
         width: {display_width}px; 
@@ -195,7 +196,7 @@ def render_slide_preview(slide_analysis):
             font-size: 12px;
             z-index:2;
         ">
-            أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"""
+            أبعاد الشريحة: {dimensions['width_inches']:.1f}" × {dimensions['height_inches']:.1f}"
         </div>
     """, unsafe_allow_html=True)
     
@@ -289,8 +290,7 @@ def render_slide_preview(slide_analysis):
         ">
             📋 عنوان
         </div>
-        ""
-    
+        """
     
     st.markdown(placeholder_html + "</div>", unsafe_allow_html=True)
 
