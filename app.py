@@ -145,9 +145,10 @@ def analyze_slide_placeholders(prs):
     return placeholders
 
 def render_slide_preview(slide_analysis):
-    """عرض معاينة تفاعلية للشريحة مع رسم مربعات الـplaceholders أولاً ثم إطار الشريحة"""
+    """عرض معاينة الشريحة مع رسم إطار الشريحة أولاً ثم رسم مربعات الـplaceholders داخله مباشرة"""
     if not slide_analysis:
         return
+
     dimensions = slide_analysis['slide_dimensions']
     max_width = 1024
     aspect_ratio = dimensions['width'] / dimensions['height']
@@ -158,8 +159,6 @@ def render_slide_preview(slide_analysis):
         display_height = max_width
         display_width = max_width * aspect_ratio
 
-    # رسم مربعات placeholders أولاً
-    placeholder_html = ""
     def clamp_box(left, top, width, height):
         left = max(0, min(left, display_width-8))
         top = max(0, min(top, display_height-8))
@@ -167,6 +166,8 @@ def render_slide_preview(slide_analysis):
         height = max(8, min(height, display_height-top))
         return left, top, width, height
 
+    # اجمع مربعات الـplaceholder في متغير واحد
+    placeholder_html = ""
     for i, placeholder in enumerate(slide_analysis['image_placeholders']):
         left = (placeholder['left_percent'] / 100) * display_width
         top = (placeholder['top_percent'] / 100) * display_height
@@ -254,7 +255,7 @@ def render_slide_preview(slide_analysis):
         </div>
         """
 
-    # ثم رسم إطار الشريحة فوقهم
+    # رسم إطار الشريحة أولاً ثم رسم كل مربعات الـplaceholder داخله مباشرة
     st.markdown(f"""
     <div style="
         width: {display_width}px;
@@ -266,7 +267,6 @@ def render_slide_preview(slide_analysis):
         border-radius: 10px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         overflow: hidden;
-        z-index: 5;
     ">
         <div style="
             position: absolute;
