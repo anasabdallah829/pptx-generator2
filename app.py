@@ -12,6 +12,8 @@ from PIL import Image
 from PIL.ExifTags import TAGS
 import tempfile
 import base64
+import streamlit.components.v1 as components
+
 
 # إعداد صفحة Streamlit
 st.set_page_config(
@@ -255,8 +257,7 @@ def render_slide_preview(slide_analysis):
         """
 
     # ثم رسم إطار الشريحة فوقهم
-    st.markdown(
-        f"""
+    html_code = f"""
     <div style="
         width: {display_width}px;
         height: {display_height}px;
@@ -284,9 +285,8 @@ def render_slide_preview(slide_analysis):
         </div>
         {placeholder_html}
     </div>
-    """,
-        unsafe_allow_html=True
-    )
+    """
+    components.html(html_code, height=int(display_height)+60, scrolling=False)
     
 def configure_image_placeholders(image_placeholders):
     """إعداد واجهة تكوين صور placeholders"""
